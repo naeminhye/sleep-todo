@@ -3,11 +3,9 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 import { nanoid } from "nanoid/non-secure";
 
-import type { Task, Priority } from "../types";
+import type { Task, TaskWeight, TaskSchedule } from "../types";
 import { storage, STORAGE_KEYS } from "../lib/storage";
-import { todayKey } from "../lib/dateUtils";
-
-// ─── Zustand storage adapter for MMKV/localStorage ───────────────────────────
+import { todayKey, tomorrowKey } from "../lib/dateUtils";
 
 const zustandStorage = createJSONStorage(() => ({
   getItem: (key: string) => storage.getString(key) ?? null,
@@ -15,51 +13,56 @@ const zustandStorage = createJSONStorage(() => ({
   removeItem: (key: string) => storage.delete(key),
 }));
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 export type CreateTaskInput = Pick<Task, "title"> &
-  Partial<Pick<Task, "note" | "category" | "dueTime" | "priority">>;
+  Partial<Pick<Task, "note" | "category" | "dueTime" | "weight" | "schedule">>;
 
 interface TaskStore {
   tasks: Task[];
 
-  // ── Selectors ──
   todayTasks: () => Task[];
-  upcomingTasks: () => Task[]; // active tasks dated after today
+  todayActive: () => Task[];
+  todayDone: () => Task[];
+  upcomingTasks: () => Task[];
   completedTodayCount: () => number;
 
-  // ── Mutations ──
   addTask: (input: CreateTaskInput) => Task;
   updateTask: (
     id: string,
     patch: Partial<
-      Pick<Task, "title" | "note" | "category" | "dueTime" | "priority">
+      Pick<
+        Task,
+        "title" | "note" | "category" | "dueTime" | "weight" | "schedule"
+      >
     >
   ) => void;
-  completeTask: (id: string) => Task | null; // returns completed task for jar store
+  completeTask: (id: string) => Task | null;
   postponeTask: (id: string) => void;
   reactivateTask: (id: string) => void;
   deleteTask: (id: string) => void;
-
-  // ── Daily reset ──
-  // Moves all non-completed tasks from previous days to today.
-  // Called from root layout on app foreground.
   carryOverIncompleteTasks: () => void;
 }
-
-// ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useTaskStore = create<TaskStore>()(
   persist(
     immer((set, get) => ({
       tasks: [],
 
-      // ── Selectors ────────────────────────────────────────────────────────
-
       todayTasks: () => {
         const today = todayKey();
+        return get().tasks.filter((t) => t.date === today);
+      },
+
+      todayActive: () => {
+        const today = todayKey();
         return get().tasks.filter(
-          (t) => t.date === today && t.status !== "completed"
+          (t) => t.date === today && t.status === "active"
+        );
+      },
+
+      todayDone: () => {
+        const today = todayKey();
+        return get().tasks.filter(
+          (t) => t.date === today && t.status === "completed"
         );
       },
 
@@ -72,32 +75,36 @@ export const useTaskStore = create<TaskStore>()(
 
       completedTodayCount: () => {
         const today = todayKey();
-        return get().tasks.filter((t) =>
-          t.status === "completed" && t.completedAt
-            ? t.completedAt.startsWith(today)
-            : false
+        return get().tasks.filter(
+          (t) => t.status === "completed" && t.completedAt?.startsWith(today)
         ).length;
       },
 
-      // ── Mutations ────────────────────────────────────────────────────────
-
       addTask: (input) => {
+        const schedule = input.schedule ?? "today";
+        const date =
+          schedule === "tomorrow"
+            ? tomorrowKey()
+            : schedule === "someday"
+            ? "9999-12-31"
+            : todayKey();
+
         const task: Task = {
           id: nanoid(),
           title: input.title.trim(),
           note: input.note,
           category: input.category,
           dueTime: input.dueTime,
-          priority: input.priority ?? "medium",
+          weight: input.weight ?? "medium",
+          schedule,
           status: "active",
           createdAt: new Date().toISOString(),
-          date: todayKey(),
+          date,
         };
 
         set((state) => {
           state.tasks.push(task);
         });
-
         return task;
       },
 
@@ -109,13 +116,13 @@ export const useTaskStore = create<TaskStore>()(
           if (patch.note !== undefined) task.note = patch.note;
           if (patch.category !== undefined) task.category = patch.category;
           if (patch.dueTime !== undefined) task.dueTime = patch.dueTime;
-          if (patch.priority !== undefined) task.priority = patch.priority;
+          if (patch.weight !== undefined) task.weight = patch.weight;
+          if (patch.schedule !== undefined) task.schedule = patch.schedule;
         });
       },
 
       completeTask: (id) => {
         let completed: Task | null = null;
-
         set((state) => {
           const task = state.tasks.find((t) => t.id === id);
           if (!task || task.status === "completed") return;
@@ -123,7 +130,6 @@ export const useTaskStore = create<TaskStore>()(
           task.completedAt = new Date().toISOString();
           completed = { ...task };
         });
-
         return completed;
       },
 
@@ -140,7 +146,7 @@ export const useTaskStore = create<TaskStore>()(
           const task = state.tasks.find((t) => t.id === id);
           if (!task) return;
           task.status = "active";
-          task.date = todayKey(); // bring back to today
+          task.date = todayKey();
         });
       },
 
@@ -150,28 +156,18 @@ export const useTaskStore = create<TaskStore>()(
         });
       },
 
-      // ── Daily reset ──────────────────────────────────────────────────────
-
       carryOverIncompleteTasks: () => {
         const today = todayKey();
-
         set((state) => {
           state.tasks.forEach((task) => {
             if (task.date < today && task.status !== "completed") {
-              // Move to today rather than losing them
               task.date = today;
-              // Postponed tasks come back as active so user sees them
-              if (task.status === "postponed") {
-                task.status = "active";
-              }
+              if (task.status === "postponed") task.status = "active";
             }
           });
         });
       },
     })),
-    {
-      name: STORAGE_KEYS.TASKS,
-      storage: zustandStorage,
-    }
+    { name: STORAGE_KEYS.TASKS, storage: zustandStorage }
   )
 );

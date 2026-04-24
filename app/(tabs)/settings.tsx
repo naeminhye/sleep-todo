@@ -1,11 +1,6 @@
 import React, { useCallback } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  Switch,
-  StyleSheet,
+  View, Text, ScrollView, Pressable, Switch, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,7 +8,16 @@ import { useThemeStore, THEMES } from '../../src/stores/themeStore';
 import { useSettingsStore } from '../../src/stores/settingsStore';
 import { useTheme } from '../../src/theme';
 import { useThemedStyles } from '../../src/theme/useThemedStyles';
-import { spacing, typography, radius } from '../../src/theme/tokens';
+import { spacing, typography, radius, fonts } from '../../src/theme/tokens';
+import type { ParticleShape } from '../../src/types';
+
+const THEME_ORDER = ['dreamyDusk', 'strawberryDream', 'cloudyMeadow', 'cozyBedroom', 'deepNight'];
+const SHAPES: { value: ParticleShape; glyph: string }[] = [
+  { value: 'star', glyph: '★' },
+  { value: 'heart', glyph: '♥' },
+  { value: 'cloud', glyph: '☁' },
+  { value: 'moon', glyph: '◑' },
+];
 
 export default function SettingsScreen() {
   const { theme } = useTheme();
@@ -23,57 +27,41 @@ export default function SettingsScreen() {
   const setTheme = useThemeStore((s) => s.setTheme);
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
-  const allThemes = Object.values(THEMES);
-
-  const toggleEncouragement = useCallback(
-    (val: boolean) => updateSettings({ dailyEncouragementEnabled: val }),
-    [updateSettings]
-  );
-  const toggleNotifications = useCallback(
-    (val: boolean) => updateSettings({ notificationsEnabled: val }),
-    [updateSettings]
-  );
 
   return (
-    <SafeAreaView
-      style={[styles.root, { backgroundColor: theme.colors.background }]}
-      edges={['top']}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+    <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.title}>settings</Text>
+          <Text style={styles.title}>your cozy corner</Text>
+          <Text style={styles.subtitle}>settings</Text>
         </View>
 
-        {/* ── Theme ── */}
+        {/* Mood / Theme */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>theme</Text>
+          <Text style={styles.sectionLabel}>mood</Text>
           <View style={styles.themeGrid}>
-            {allThemes.map((t) => {
-              const isActive = t.id === activeThemeId;
+            {THEME_ORDER.map((id) => {
+              const t = THEMES[id];
+              const isActive = id === activeThemeId;
               return (
                 <Pressable
-                  key={t.id}
+                  key={id}
                   style={[
                     styles.themeCard,
                     { backgroundColor: t.colors.surface },
                     { borderColor: isActive ? t.colors.primary : t.colors.taskCardBorder },
-                    isActive && styles.themeCardActive,
+                    isActive && { borderWidth: 2 },
                   ]}
-                  onPress={() => setTheme(t.id)}
+                  onPress={() => setTheme(id)}
                 >
                   <View style={styles.swatchRow}>
+                    <View style={[styles.swatch, { backgroundColor: t.colors.backgroundGradientStart }]} />
                     <View style={[styles.swatch, { backgroundColor: t.colors.primary }]} />
                     <View style={[styles.swatch, { backgroundColor: t.colors.accent }]} />
-                    <View style={[styles.swatch, { backgroundColor: t.colors.background }]} />
                   </View>
-                  <Text style={[styles.themeName, { color: t.colors.text }]} numberOfLines={1}>
-                    {t.name}
-                  </Text>
+                  <Text style={[styles.themeName, { color: t.colors.text }]}>{t.name}</Text>
                   {isActive && (
-                    <Text style={[styles.themeActive, { color: t.colors.primary }]}>✦</Text>
+                    <Text style={[styles.themeCheck, { color: t.colors.primary }]}>✦</Text>
                   )}
                 </Pressable>
               );
@@ -81,38 +69,71 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* ── Preferences ── */}
+        {/* What you collect */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>preferences</Text>
-          <View style={styles.card}>
-            <SettingRow
-              label="daily encouragement"
-              description="show gentle messages in the jar"
-              value={settings.dailyEncouragementEnabled}
-              onToggle={toggleEncouragement}
-            />
-            <View style={styles.divider} />
-            <SettingRow
-              label="gentle reminders"
-              description="soft nudges to check your tasks"
-              value={settings.notificationsEnabled}
-              onToggle={toggleNotifications}
-            />
+          <Text style={styles.sectionLabel}>what you collect</Text>
+          <View style={styles.shapeRow}>
+            {SHAPES.map((s) => {
+              const isActive = settings.collectibleShape === s.value;
+              return (
+                <Pressable
+                  key={s.value}
+                  style={[
+                    styles.shapeChip,
+                    isActive && { backgroundColor: theme.colors.primary + '20', borderColor: theme.colors.primary },
+                  ]}
+                  onPress={() => updateSettings({ collectibleShape: s.value })}
+                >
+                  <Text style={[styles.shapeGlyph, { color: isActive ? theme.colors.primary : theme.colors.textMuted }]}>
+                    {s.glyph}
+                  </Text>
+                  <Text style={[styles.shapeLabel, { color: isActive ? theme.colors.primary : theme.colors.textMuted }]}>
+                    {s.value}s
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
-        {/* ── About ── */}
+        {/* Gentle preferences */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>about</Text>
+          <Text style={styles.sectionLabel}>gentle preferences</Text>
           <View style={styles.card}>
-            <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>sleepy to-do</Text>
-              <Text style={styles.aboutValue}>v1.0.0</Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>small tasks, gentle progress</Text>
-            </View>
+            <ToggleRow
+              label="dark mode"
+              description="easier on sleepy eyes"
+              value={settings.darkMode}
+              onToggle={(v) => updateSettings({ darkMode: v })}
+            />
+            <Divider />
+            <ToggleRow
+              label="bedtime reminder"
+              description={`a whisper at ${settings.reminderTime}`}
+              value={settings.notificationsEnabled}
+              onToggle={(v) => updateSettings({ notificationsEnabled: v })}
+            />
+            <Divider />
+            <ToggleRow
+              label="haptic feedback"
+              description="a soft tap when you finish"
+              value={settings.hapticFeedback}
+              onToggle={(v) => updateSettings({ hapticFeedback: v })}
+            />
+            <Divider />
+            <ToggleRow
+              label="show streaks"
+              description="kept quiet for now"
+              value={settings.showStreaks}
+              onToggle={(v) => updateSettings({ showStreaks: v })}
+            />
+            <Divider />
+            <ToggleRow
+              label="daily encouragement"
+              description="gentle messages in your jar"
+              value={settings.dailyEncouragementEnabled}
+              onToggle={(v) => updateSettings({ dailyEncouragementEnabled: v })}
+            />
           </View>
         </View>
       </ScrollView>
@@ -120,109 +141,86 @@ export default function SettingsScreen() {
   );
 }
 
-// ─── SettingRow ───────────────────────────────────────────────────────────────
+function Divider() {
+  const { theme } = useTheme();
+  return (
+    <View style={{
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: theme.colors.taskCardBorder,
+      marginHorizontal: spacing.lg,
+    }} />
+  );
+}
 
-function SettingRow({
-  label,
-  description,
-  value,
-  onToggle,
-}: {
-  label: string;
-  description: string;
-  value: boolean;
-  onToggle: (v: boolean) => void;
+function ToggleRow({ label, description, value, onToggle }: {
+  label: string; description: string;
+  value: boolean; onToggle: (v: boolean) => void;
 }) {
   const { theme } = useTheme();
-  const styles = useThemedStyles(makeStyles);
   return (
-    <View style={styles.settingRow}>
-      <View style={styles.settingText}>
-        <Text style={styles.settingLabel}>{label}</Text>
-        <Text style={styles.settingDesc}>{description}</Text>
+    <View style={{
+      flexDirection: 'row', alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+      gap: spacing.md,
+    }}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ fontSize: typography.size.md, color: theme.colors.text, fontFamily: fonts.regular }}>
+          {label}
+        </Text>
+        <Text style={{ fontSize: typography.size.xs, color: theme.colors.textMuted, fontFamily: fonts.regular }}>
+          {description}
+        </Text>
       </View>
       <Switch
         value={value}
         onValueChange={onToggle}
-        trackColor={{
-          false: theme.colors.surfaceAlt,
-          true: theme.colors.primary + '80',
-        }}
+        trackColor={{ false: theme.colors.surfaceAlt, true: theme.colors.primary + '80' }}
         thumbColor={value ? theme.colors.primary : theme.colors.textSubtle}
       />
     </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 function makeStyles(theme: import('../../src/types').Theme) {
   return StyleSheet.create({
     root: { flex: 1 },
     scroll: { paddingBottom: spacing.xxxl, gap: spacing.xl },
-    header: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg },
+    header: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: 2 },
     title: {
-      fontSize: typography.size.xxl,
-      fontWeight: typography.weight.medium,
-      color: theme.colors.text,
-      letterSpacing: -0.5,
+      fontSize: typography.size.xxl, color: theme.colors.text,
+      fontFamily: fonts.display, letterSpacing: -0.5,
+    },
+    subtitle: {
+      fontSize: typography.size.sm, color: theme.colors.textMuted,
+      fontFamily: fonts.regular,
     },
     section: { gap: spacing.sm, paddingHorizontal: spacing.xl },
     sectionLabel: {
-      fontSize: typography.size.xs,
-      color: theme.colors.textSubtle,
-      fontWeight: typography.weight.medium,
-      letterSpacing: 0.5,
+      fontSize: typography.size.xs, color: theme.colors.textSubtle,
+      fontFamily: fonts.medium, letterSpacing: 0.5,
     },
     themeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
     themeCard: {
-      width: '47%' as any,
-      borderRadius: radius.lg,
-      borderWidth: 1.5,
-      padding: spacing.md,
-      gap: spacing.xs,
+      width: '47%' as any, borderRadius: radius.lg,
+      borderWidth: 1, padding: spacing.md, gap: spacing.xs,
     },
-    themeCardActive: { borderWidth: 2 },
     swatchRow: { flexDirection: 'row', gap: spacing.xs },
-    swatch: { width: 12, height: 12, borderRadius: radius.full },
-    themeName: { fontSize: typography.size.sm, fontWeight: typography.weight.medium },
-    themeActive: {
-      fontSize: typography.size.xs,
-      position: 'absolute',
-      top: spacing.sm,
-      right: spacing.sm,
+    swatch: { width: 10, height: 10, borderRadius: radius.full },
+    themeName: { fontSize: typography.size.sm, fontFamily: fonts.medium },
+    themeCheck: { position: 'absolute', top: spacing.sm, right: spacing.sm, fontSize: 11 },
+    shapeRow: { flexDirection: 'row', gap: spacing.sm },
+    shapeChip: {
+      flex: 1, alignItems: 'center', paddingVertical: spacing.md,
+      borderRadius: radius.lg, borderWidth: 1,
+      borderColor: theme.colors.taskCardBorder, gap: spacing.xs,
     },
+    shapeGlyph: { fontSize: 22 },
+    shapeLabel: { fontSize: typography.size.xs, fontFamily: fonts.regular },
     card: {
       backgroundColor: theme.colors.surface,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: theme.colors.taskCardBorder,
-      overflow: 'hidden',
+      borderRadius: radius.lg, borderWidth: 1,
+      borderColor: theme.colors.taskCardBorder, overflow: 'hidden',
     },
-    divider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: theme.colors.taskCardBorder,
-      marginHorizontal: spacing.lg,
-    },
-    settingRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
-      gap: spacing.md,
-    },
-    settingText: { flex: 1, gap: 2 },
-    settingLabel: { fontSize: typography.size.md, color: theme.colors.text },
-    settingDesc: { fontSize: typography.size.xs, color: theme.colors.textMuted },
-    aboutRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
-    },
-    aboutLabel: { fontSize: typography.size.sm, color: theme.colors.textMuted },
-    aboutValue: { fontSize: typography.size.sm, color: theme.colors.textSubtle },
   });
 }

@@ -1,97 +1,91 @@
 import React, { useCallback, useRef } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  ListRenderItem,
+  View, Text, SectionList, StyleSheet,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
-import type { Task, Priority } from '../../src/types';
+import type { Task } from '../../src/types';
 import { useTaskStore } from '../../src/stores/taskStore';
 import { useJarStore } from '../../src/stores/jarStore';
+import { useSettingsStore } from '../../src/stores/settingsStore';
+import { useThemeStore } from '../../src/stores/themeStore';
 import { useTheme } from '../../src/theme';
 import { useThemedStyles } from '../../src/theme/useThemedStyles';
-import { spacing, typography } from '../../src/theme/tokens';
+import { spacing, typography, radius, fonts } from '../../src/theme/tokens';
 import { TaskCard } from '../../src/components/task/TaskCard';
 import { TaskInput } from '../../src/components/task/TaskInput';
-import { friendlyDateLabel, todayKey } from '../../src/lib/dateUtils';
 import { useAnimationOverlay } from '../../src/components/AnimationOverlayProvider';
-import { useThemeStore } from '../../src/stores/themeStore';
+import { friendlyDayOfWeek, friendlyMonthDay } from '../../src/lib/dateUtils';
 import { Dimensions } from 'react-native';
 
 const SHAPE_GLYPH: Record<string, string> = {
-  star: '✦', heart: '♥', cloud: '☁', sparkle: '✿',
+  star: '✦', heart: '♥', cloud: '☁', moon: '◑',
 };
 
 export default function TodayScreen() {
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
-  const todayTasks = useTaskStore((s) => s.todayTasks());
+  const todayActive = useTaskStore((s) => s.todayActive());
+  const todayDone = useTaskStore((s) => s.todayDone());
   const completedCount = useTaskStore((s) => s.completedTodayCount());
+  const totalToday = todayActive.length + todayDone.length;
   const addTask = useTaskStore((s) => s.addTask);
   const completeTask = useTaskStore((s) => s.completeTask);
   const postponeTask = useTaskStore((s) => s.postponeTask);
   const addJarEntry = useJarStore((s) => s.addEntry);
   const activeTheme = useThemeStore((s) => s.theme);
+  const userName = useSettingsStore((s) => s.settings.userName);
   const { fireParticle } = useAnimationOverlay();
 
   const { width, height } = Dimensions.get('window');
-  // Jar tab is 2nd of 4 → ~37.5% across, near bottom
   const jarTabX = width * 0.375;
   const jarTabY = height - 40;
 
-  // Map of taskId → ref for position measurement
   const cardRefs = useRef<Map<string, View>>(new Map());
-
-  const handleAdd = useCallback((title: string, priority: Priority) => {
-    addTask({ title, priority });
-  }, [addTask]);
 
   const handleComplete = useCallback((id: string) => {
     const ref = cardRefs.current.get(id);
-
-    // Fire particle from card position
-    if (ref) {
-      ref.measureInWindow((x, y, w, h) => {
-        fireParticle({
-          fromX: x + w / 2,
-          fromY: y + h / 2,
-          toX: jarTabX,
-          toY: jarTabY,
-          shape: SHAPE_GLYPH[activeTheme.particleShape] ?? '✦',
-          color: activeTheme.colors.primary,
-        });
-      });
-    } else {
+    const shoot = (fromX: number, fromY: number) => {
       fireParticle({
-        fromX: width / 2,
-        fromY: height / 2,
-        toX: jarTabX,
-        toY: jarTabY,
+        fromX, fromY,
+        toX: jarTabX, toY: jarTabY,
         shape: SHAPE_GLYPH[activeTheme.particleShape] ?? '✦',
-        color: activeTheme.colors.primary,
+        color: activeTheme.colors.accent,
       });
+    };
+
+    if (ref) {
+      ref.measureInWindow((x, y, w, h) => shoot(x + w / 2, y + h / 2));
+    } else {
+      shoot(width / 2, height / 2);
     }
 
-    // Update stores
     const completed = completeTask(id);
-    if (completed) addJarEntry(completed.id, completed.title);
+    if (completed) {
+      addJarEntry(completed.id, completed.title);
+      const newCount = completedCount + 1;
+      router.push({
+        pathname: '/complete',
+        params: {
+          taskId: completed.id,
+          title: completed.title,
+          count: String(newCount),
+          total: String(totalToday),
+        },
+      });
+    }
     cardRefs.current.delete(id);
-  }, [completeTask, addJarEntry, fireParticle, activeTheme, jarTabX, jarTabY]);
+  }, [completeTask, addJarEntry, fireParticle, activeTheme, completedCount, totalToday]);
 
-  const handlePostpone = useCallback((id: string) => {
-    postponeTask(id);
-  }, [postponeTask]);
-
+  const handlePostpone = useCallback((id: string) => postponeTask(id), [postponeTask]);
   const handlePressTask = useCallback((id: string) => {
     router.push({ pathname: '/task/[id]', params: { id } });
   }, []);
 
-  const renderTask: ListRenderItem<Task> = useCallback(({ item }) => (
+  const renderTask = useCallback(({ item }: { item: Task }) => (
     <TaskCard
       ref={(r) => {
         if (r) cardRefs.current.set(item.id, r);
@@ -104,37 +98,83 @@ export default function TodayScreen() {
     />
   ), [handleComplete, handlePostpone, handlePressTask]);
 
-  return (
-    <SafeAreaView
-      style={[styles.root, { backgroundColor: theme.colors.background }]}
-      edges={['top']}
-    >
-      <View style={styles.header}>
-        <Text style={styles.dateLabel}>{friendlyDateLabel(todayKey())}</Text>
-        <Text style={styles.title}>your tasks</Text>
-        {completedCount > 0 && (
-          <Text style={styles.completedCount}>
-            {completedCount} {completedCount === 1 ? 'star' : 'stars'} collected ✦
-          </Text>
-        )}
-      </View>
+  const sections = [
+    ...(todayActive.length > 0 ? [{ title: 'to do ↓', data: todayActive, isDone: false }] : []),
+    ...(todayDone.length > 0 ? [{ title: 'done · nice work ♡', data: todayDone, isDone: true }] : []),
+  ];
 
-      <FlatList
-        data={todayTasks}
+  return (
+    <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['top']}>
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
         renderItem={renderTask}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>🌙</Text>
-            <Text style={styles.emptyText}>no tasks yet</Text>
-            <Text style={styles.emptySubtext}>add something small below</Text>
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={[
+              styles.sectionTitle,
+              section.isDone && { color: theme.colors.done },
+            ]}>
+              {section.title}
+            </Text>
+          </View>
+        )}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            {/* Date */}
+            <Text style={styles.dateLabel}>
+              {friendlyDayOfWeek()} · {friendlyMonthDay()}
+            </Text>
+            {/* Greeting */}
+            <Text style={styles.greeting}>
+              hi, {userName || 'friend'}
+            </Text>
+            {/* Progress */}
+            {totalToday > 0 && (
+              <Text style={styles.progress}>
+                {completedCount} of {totalToday} little things done
+                {todayActive.length > 0 ? ` · ${todayActive.length} to go` : ' · all done ✦'}
+              </Text>
+            )}
           </View>
         }
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={styles.emptyEmoji}>zz</Text>
+            <Text style={styles.emptyText}>nothing here yet</Text>
+            <Text style={styles.emptySubtext}>add a little thing below</Text>
+          </View>
+        }
+        contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={false}
       />
 
-      <TaskInput onAdd={handleAdd} />
+      {/* Focus mode button */}
+      {todayActive.length > 0 && (
+        <Pressable
+          style={[styles.focusBtn, { borderColor: theme.colors.primary + '60' }]}
+          onPress={() => router.push('/focus')}
+        >
+          <Text style={[styles.focusLabel, { color: theme.colors.primary }]}>
+            ✦ just this one
+          </Text>
+        </Pressable>
+      )}
+
+      {/* End of day button */}
+      {completedCount > 0 && (
+        <Pressable
+          style={[styles.eodBtn, { borderColor: theme.colors.taskCardBorder }]}
+          onPress={() => router.push('/endofday')}
+        >
+          <Text style={[styles.eodLabel, { color: theme.colors.textMuted }]}>
+            that's enough for today zzz
+          </Text>
+        </Pressable>
+      )}
+
+      <TaskInput onAdd={(title, weight, schedule) => { addTask({ title, weight, schedule }); }} />
     </SafeAreaView>
   );
 }
@@ -142,6 +182,7 @@ export default function TodayScreen() {
 function makeStyles(theme: import('../../src/types').Theme) {
   return StyleSheet.create({
     root: { flex: 1 },
+    list: { paddingBottom: 160, flexGrow: 1 },
     header: {
       paddingHorizontal: spacing.xl,
       paddingTop: spacing.lg,
@@ -151,40 +192,55 @@ function makeStyles(theme: import('../../src/types').Theme) {
     dateLabel: {
       fontSize: typography.size.sm,
       color: theme.colors.textMuted,
-      fontWeight: typography.weight.medium,
-      textTransform: 'lowercase',
+      fontFamily: fonts.regular,
     },
-    title: {
-      fontSize: typography.size.xxl,
-      fontWeight: typography.weight.medium,
+    greeting: {
+      fontSize: typography.size.xxxl,
       color: theme.colors.text,
-      letterSpacing: -0.5,
+      fontFamily: fonts.display,
+      lineHeight: 40,
     },
-    completedCount: {
+    progress: {
       fontSize: typography.size.sm,
-      color: theme.colors.primary,
+      color: theme.colors.textMuted,
+      fontFamily: fonts.regular,
     },
-    list: {
-      paddingTop: spacing.sm,
-      paddingBottom: spacing.xl,
-      flexGrow: 1,
+    sectionHeader: {
+      paddingHorizontal: spacing.xl,
+      paddingTop: spacing.lg,
+      paddingBottom: spacing.sm,
+    },
+    sectionTitle: {
+      fontSize: typography.size.sm,
+      color: theme.colors.textMuted,
+      fontFamily: fonts.medium,
     },
     empty: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingTop: spacing.xxxl,
-      gap: spacing.sm,
+      alignItems: 'center', paddingTop: spacing.xxxl, gap: spacing.sm,
     },
-    emptyEmoji: { fontSize: 48 },
+    emptyEmoji: { fontSize: 32, color: theme.colors.textSubtle },
     emptyText: {
-      fontSize: typography.size.lg,
-      color: theme.colors.textMuted,
-      fontWeight: typography.weight.medium,
+      fontSize: typography.size.lg, color: theme.colors.textMuted,
+      fontFamily: fonts.medium,
     },
     emptySubtext: {
-      fontSize: typography.size.sm,
-      color: theme.colors.textSubtle,
+      fontSize: typography.size.sm, color: theme.colors.textSubtle,
+      fontFamily: fonts.regular,
     },
+    focusBtn: {
+      marginHorizontal: spacing.xl,
+      marginBottom: spacing.xs,
+      borderRadius: radius.full,
+      borderWidth: 1,
+      paddingVertical: spacing.sm,
+      alignItems: 'center',
+    },
+    focusLabel: { fontSize: typography.size.sm, fontFamily: fonts.medium },
+    eodBtn: {
+      marginHorizontal: spacing.xl, marginBottom: spacing.sm,
+      borderRadius: radius.full, borderWidth: 1,
+      paddingVertical: spacing.sm, alignItems: 'center',
+    },
+    eodLabel: { fontSize: typography.size.sm, fontFamily: fonts.regular },
   });
 }

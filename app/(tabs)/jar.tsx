@@ -1,87 +1,94 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 
 import { useJarStore } from '../../src/stores/jarStore';
 import { useThemeStore } from '../../src/stores/themeStore';
 import { useSettingsStore } from '../../src/stores/settingsStore';
 import { useTheme } from '../../src/theme';
 import { useThemedStyles } from '../../src/theme/useThemedStyles';
-import { spacing, typography, radius } from '../../src/theme/tokens';
+import { spacing, typography, radius, fonts } from '../../src/theme/tokens';
 import { JarView } from '../../src/components/jar/JarView';
 import { DailyEncouragement } from '../../src/components/shared/DailyEncouragement';
-import { getJarEncouragement } from '../../src/lib/encouragement';
 
 export default function JarScreen() {
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
   const todayEntries = useJarStore((s) => s.todayEntries);
-  const todayCount = useJarStore((s) => s.todayCount());
+  const history = useJarStore((s) => s.history);
   const activeTheme = useThemeStore((s) => s.theme);
-  const encouragementEnabled = useSettingsStore(
-    (s) => s.settings.dailyEncouragementEnabled
-  );
+  const userName = useSettingsStore((s) => s.settings.userName);
+  const showEncouragement = useSettingsStore((s) => s.settings.dailyEncouragementEnabled);
 
-  const encouragementContext =
-    todayCount === 0 ? 'jarEmpty'
-      : todayCount < 3 ? 'jarFilling'
-        : 'jarFull';
+  const totalStars = Object.values(history).reduce((sum, r) => sum + r.totalCompleted, 0)
+    + todayEntries.length;
+  const totalDays = Object.keys(history).length + (todayEntries.length > 0 ? 1 : 0);
+
+  const context = todayEntries.length === 0 ? 'jarEmpty'
+    : todayEntries.length < 3 ? 'jarFilling' : 'jarFull';
 
   return (
-    <SafeAreaView
-      style={[styles.root, { backgroundColor: theme.colors.background }]}
-      edges={['top']}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+    <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>today's jar</Text>
+          <Pressable onPress={() => router.push('/history' as any)}>
+            <Text style={styles.historyLink}>← your quiet month</Text>
+          </Pressable>
+          <Text style={styles.headerRight}>✦</Text>
+        </View>
+
+        {/* Title */}
+        <View style={styles.titleWrap}>
+          <Text style={styles.title}>your little collection</Text>
           <Text style={styles.subtitle}>
-            {todayCount === 0
-              ? 'complete tasks to fill it up'
-              : `${todayCount} ${todayCount === 1 ? 'task' : 'tasks'} completed`}
+            {totalStars} stars{'\n'}
+            from {totalDays} cozy {totalDays === 1 ? 'day' : 'days'} ♡
           </Text>
         </View>
 
-        {/* Jar */}
+        {/* Jar illustration */}
         <View style={styles.jarWrap}>
           <JarView
             entries={todayEntries}
-            jarDesign={activeTheme.jarDesign}
-            label="today"
+            totalStars={totalStars}
+            shape={activeTheme.particleShape}
           />
         </View>
 
-        {/* Encouragement */}
-        {encouragementEnabled && (
-          <View style={styles.encouragementWrap}>
-            <DailyEncouragement context={encouragementContext} />
+        {/* Milestones */}
+        {totalStars > 0 && (
+          <View style={styles.milestones}>
+            <Text style={styles.milestonesLabel}>little milestones</Text>
+            <View style={styles.milestoneRow}>
+              {totalDays >= 7 && (
+                <View style={[styles.milestoneBadge, { backgroundColor: theme.colors.surfaceAlt }]}>
+                  <Text style={styles.milestoneStar}>✦</Text>
+                  <Text style={styles.milestoneText}>7 day{'\n'}streak</Text>
+                </View>
+              )}
+              {totalStars >= 50 && (
+                <View style={[styles.milestoneBadge, { backgroundColor: theme.colors.surfaceAlt }]}>
+                  <Text style={styles.milestoneStar}>★★</Text>
+                  <Text style={styles.milestoneText}>50 stars{'\n'}full jar</Text>
+                </View>
+              )}
+              {totalDays >= 30 && (
+                <View style={[styles.milestoneBadge, { backgroundColor: theme.colors.surfaceAlt }]}>
+                  <Text style={styles.milestoneStar}>◑</Text>
+                  <Text style={styles.milestoneText}>one{'\n'}month</Text>
+                </View>
+              )}
+            </View>
           </View>
         )}
 
-        {/* Progress summary */}
-        {todayCount > 0 && (
-          <View style={styles.summary}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>completed today</Text>
-              <Text style={styles.summaryValue}>{todayCount}</Text>
-            </View>
-            <View style={[styles.progressBar, { backgroundColor: theme.colors.surfaceAlt }]}>
-              <View style={[
-                styles.progressFill,
-                {
-                  width: `${Math.min((todayCount / 10) * 100, 100)}%` as any,
-                  backgroundColor: theme.colors.primary,
-                },
-              ]} />
-            </View>
-            <Text style={styles.progressHint}>
-              {todayCount >= 10 ? 'jar full ✦' : `${10 - todayCount} more to fill the jar`}
-            </Text>
+        {/* Encouragement */}
+        {showEncouragement && (
+          <View style={styles.encourageWrap}>
+            <DailyEncouragement context={context} />
           </View>
         )}
       </ScrollView>
@@ -92,68 +99,42 @@ export default function JarScreen() {
 function makeStyles(theme: import('../../src/types').Theme) {
   return StyleSheet.create({
     root: { flex: 1 },
-    scroll: {
-      paddingBottom: spacing.xxxl,
-      gap: spacing.xl,
-    },
+    scroll: { paddingBottom: spacing.xxxl, gap: spacing.xl },
     header: {
-      paddingHorizontal: spacing.xl,
-      paddingTop: spacing.lg,
-      gap: spacing.xs,
+      flexDirection: 'row', justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: spacing.xl, paddingTop: spacing.lg,
     },
+    historyLink: {
+      fontSize: typography.size.sm, color: theme.colors.primary,
+      fontFamily: fonts.regular,
+    },
+    headerRight: { fontSize: 16, color: theme.colors.primary },
+    titleWrap: { paddingHorizontal: spacing.xl, gap: spacing.xs },
     title: {
-      fontSize: typography.size.xxl,
-      fontWeight: typography.weight.medium,
-      color: theme.colors.text,
-      letterSpacing: -0.5,
+      fontSize: typography.size.xxl, color: theme.colors.text,
+      fontFamily: fonts.display,
     },
     subtitle: {
-      fontSize: typography.size.sm,
-      color: theme.colors.textMuted,
+      fontSize: typography.size.sm, color: theme.colors.textMuted,
+      fontFamily: fonts.regular, lineHeight: 20,
     },
-    jarWrap: {
-      alignItems: 'center',
-      paddingVertical: spacing.md,
+    jarWrap: { alignItems: 'center', paddingVertical: spacing.md },
+    milestones: { paddingHorizontal: spacing.xl, gap: spacing.sm },
+    milestonesLabel: {
+      fontSize: typography.size.xs, color: theme.colors.textSubtle,
+      fontFamily: fonts.medium, letterSpacing: 0.5,
     },
-    encouragementWrap: {
-      marginHorizontal: spacing.xl,
+    milestoneRow: { flexDirection: 'row', gap: spacing.sm },
+    milestoneBadge: {
+      borderRadius: radius.md, padding: spacing.md,
+      alignItems: 'center', gap: spacing.xs, minWidth: 72,
     },
-    summary: {
-      marginHorizontal: spacing.xl,
-      backgroundColor: theme.colors.surface,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: theme.colors.taskCardBorder,
-      padding: spacing.lg,
-      gap: spacing.sm,
+    milestoneStar: { fontSize: typography.size.md, color: theme.colors.accent },
+    milestoneText: {
+      fontSize: typography.size.xs, color: theme.colors.textMuted,
+      fontFamily: fonts.regular, textAlign: 'center',
     },
-    summaryRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    summaryLabel: {
-      fontSize: typography.size.sm,
-      color: theme.colors.textMuted,
-    },
-    summaryValue: {
-      fontSize: typography.size.lg,
-      fontWeight: typography.weight.medium,
-      color: theme.colors.primary,
-    },
-    progressBar: {
-      height: 6,
-      borderRadius: radius.full,
-      overflow: 'hidden',
-    },
-    progressFill: {
-      height: 6,
-      borderRadius: radius.full,
-    },
-    progressHint: {
-      fontSize: typography.size.xs,
-      color: theme.colors.textSubtle,
-      textAlign: 'right',
-    },
+    encourageWrap: { paddingHorizontal: spacing.xl },
   });
 }

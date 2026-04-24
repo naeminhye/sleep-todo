@@ -1,25 +1,28 @@
+export type TaskWeight = "tiny" | "medium" | "big";
+export type TaskSchedule = "today" | "tomorrow" | "someday";
 export type TaskStatus = "active" | "completed" | "postponed";
-export type Priority = "low" | "medium" | "high";
-export type ParticleShape = "star" | "heart" | "cloud" | "sparkle";
+export type ParticleShape = "star" | "heart" | "cloud" | "moon";
 export type JarDesign = "star-jar" | "moon-basket" | "dream-bottle";
+export type Priority = "low" | "medium" | "high";
 
 export interface Task {
   id: string;
   title: string;
   note?: string;
   category?: string;
-  dueTime?: string; // ISO time string, time-only (HH:mm)
-  priority: Priority;
+  dueTime?: string;
+  weight: TaskWeight;
+  schedule: TaskSchedule;
   status: TaskStatus;
-  createdAt: string; // ISO datetime
-  completedAt?: string; // ISO datetime — set when status → completed
-  date: string; // YYYY-MM-DD — which day this task belongs to
+  createdAt: string;
+  completedAt?: string;
+  date: string; // YYYY-MM-DD
 }
 
 export interface JarEntry {
   taskId: string;
   title: string;
-  completedAt: string; // ISO datetime
+  completedAt: string;
   shape: ParticleShape;
 }
 
@@ -31,6 +34,8 @@ export interface DailyRecord {
 
 export interface ThemeColors {
   background: string;
+  backgroundGradientStart: string;
+  backgroundGradientEnd: string;
   surface: string;
   surfaceAlt: string;
   primary: string;
@@ -44,6 +49,7 @@ export interface ThemeColors {
   jarBackground: string;
   tabBar: string;
   tabBarBorder: string;
+  done: string;
 }
 
 export interface Theme {
@@ -56,7 +62,13 @@ export interface Theme {
 }
 
 export interface AppSettings {
+  userName: string;
   notificationsEnabled: boolean;
-  reminderTime?: string; // HH:mm
+  reminderTime: string;
   dailyEncouragementEnabled: boolean;
+  collectibleShape: ParticleShape;
+  darkMode: boolean;
+  hapticFeedback: boolean;
+  showStreaks: boolean;
+  onboardingComplete: boolean;
 }

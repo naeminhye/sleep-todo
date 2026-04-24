@@ -1,61 +1,45 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Keyboard,
+  View, Text, TextInput, Pressable,
+  StyleSheet, KeyboardAvoidingView, Platform, Keyboard,
 } from 'react-native';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
+  useSharedValue, useAnimatedStyle, withSpring,
 } from 'react-native-reanimated';
 
-import type { Priority } from '../../types';
+import type { TaskWeight, TaskSchedule } from '../../types';
 import { useTheme } from '../../theme';
 import { useThemedStyles } from '../../theme/useThemedStyles';
-import { spacing, radius, typography } from '../../theme/tokens';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { spacing, radius, typography, fonts } from '../../theme/tokens';
 
 interface TaskInputProps {
-  onAdd: (title: string, priority: Priority) => void;
+  onAdd: (title: string, weight: TaskWeight, schedule: TaskSchedule) => void;
 }
 
-// ─── Priority options ─────────────────────────────────────────────────────────
-
-const PRIORITIES: { value: Priority; label: string; color: string }[] = [
-  { value: 'low',    label: 'low',    color: '#6ee7b7' },
-  { value: 'medium', label: 'mid',    color: '#fcd34d' },
-  { value: 'high',   label: 'high',   color: '#fca5a5' },
+const WEIGHTS: { value: TaskWeight; label: string }[] = [
+  { value: 'tiny', label: 'tiny' },
+  { value: 'medium', label: 'medium' },
+  { value: 'big', label: 'big' },
 ];
 
-// ─── Component ────────────────────────────────────────────────────────────────
+const SCHEDULES: { value: TaskSchedule; label: string }[] = [
+  { value: 'today', label: 'today' },
+  { value: 'tomorrow', label: 'tomorrow' },
+  { value: 'someday', label: 'someday' },
+];
 
 export function TaskInput({ onAdd }: TaskInputProps) {
   const { theme } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
   const [title, setTitle] = useState('');
-  const [priority, setPriority] = useState<Priority>('medium');
+  const [weight, setWeight] = useState<TaskWeight>('medium');
+  const [schedule, setSchedule] = useState<TaskSchedule>('today');
   const [expanded, setExpanded] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  const expandAnim = useSharedValue(0);
-  const buttonScale = useSharedValue(1);
-
-  const expandedStyle = useAnimatedStyle(() => ({
-    maxHeight: withSpring(expanded ? 160 : 56, { damping: 18 }),
-    opacity: withTiming(expanded ? 1 : 0.95, { duration: 150 }),
-  }));
-
-  const buttonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: buttonScale.value }],
+  const containerStyle = useAnimatedStyle(() => ({
+    maxHeight: withSpring(expanded ? 220 : 60, { damping: 18 }),
   }));
 
   const handleExpand = useCallback(() => {
@@ -66,103 +50,119 @@ export function TaskInput({ onAdd }: TaskInputProps) {
   const handleSubmit = useCallback(() => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    onAdd(trimmed, priority);
+    onAdd(trimmed, weight, schedule);
     setTitle('');
-    setPriority('medium');
+    setWeight('medium');
+    setSchedule('today');
     setExpanded(false);
     Keyboard.dismiss();
-  }, [title, priority, onAdd]);
+  }, [title, weight, schedule, onAdd]);
 
   const handleCancel = useCallback(() => {
     setTitle('');
-    setPriority('medium');
     setExpanded(false);
     Keyboard.dismiss();
   }, []);
-
-  const handleAddPress = () => {
-    buttonScale.value = withSpring(0.92, { damping: 15 }, () => {
-      buttonScale.value = withSpring(1, { damping: 15 });
-    });
-    if (!expanded) {
-      handleExpand();
-    } else {
-      handleSubmit();
-    }
-  };
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={90}
     >
-      <Animated.View style={[styles.container, expandedStyle]}>
-        {/* Collapsed state — just a prompt row */}
-        {!expanded && (
-          <Pressable style={styles.collapsedRow} onPress={handleExpand}>
-            <Text style={styles.placeholder}>+ add a tiny task...</Text>
+      <Animated.View style={[styles.container, containerStyle]}>
+        {!expanded ? (
+          <Pressable style={styles.collapsed} onPress={handleExpand}>
+            <Text style={styles.collapsedIcon}>+</Text>
+            <Text style={styles.collapsedLabel}>add a little thing</Text>
           </Pressable>
-        )}
+        ) : (
+          <View style={styles.expanded}>
+            {/* Input */}
+            <View style={styles.inputRow}>
+              <Text style={styles.inputIcon}>✎</Text>
+              <TextInput
+                ref={inputRef}
+                style={styles.input}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="new little thing..."
+                placeholderTextColor={theme.colors.textSubtle}
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
+                autoFocus
+              />
+            </View>
 
-        {/* Expanded state */}
-        {expanded && (
-          <View style={styles.expandedInner}>
-            <TextInput
-              ref={inputRef}
-              style={styles.input}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="what's the tiny task?"
-              placeholderTextColor={theme.colors.textSubtle}
-              returnKeyType="done"
-              onSubmitEditing={handleSubmit}
-              autoFocus
-            />
-
-            {/* Priority row + actions */}
-            <View style={styles.bottomRow}>
-              <View style={styles.priorityRow}>
-                {PRIORITIES.map((p) => (
+            {/* Schedule row */}
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>when?</Text>
+              <View style={styles.chips}>
+                {SCHEDULES.map((s) => (
                   <Pressable
-                    key={p.value}
+                    key={s.value}
                     style={[
-                      styles.priorityChip,
-                      priority === p.value && {
-                        backgroundColor: p.color + '30',
-                        borderColor: p.color,
+                      styles.chip,
+                      schedule === s.value && {
+                        backgroundColor: theme.colors.primary,
+                        borderColor: theme.colors.primary,
                       },
                     ]}
-                    onPress={() => setPriority(p.value)}
+                    onPress={() => setSchedule(s.value)}
                   >
-                    <View style={[styles.priorityDot, { backgroundColor: p.color }]} />
                     <Text style={[
-                      styles.priorityLabel,
-                      priority === p.value && { color: theme.colors.text },
+                      styles.chipLabel,
+                      schedule === s.value && { color: '#ffffff' },
                     ]}>
-                      {p.label}
+                      {s.label}
                     </Text>
                   </Pressable>
                 ))}
               </View>
+            </View>
 
-              <View style={styles.actions}>
-                <Pressable onPress={handleCancel} style={styles.cancelBtn}>
-                  <Text style={styles.cancelLabel}>cancel</Text>
-                </Pressable>
-                <Animated.View style={buttonStyle}>
+            {/* Weight row */}
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>worth a...</Text>
+              <View style={styles.chips}>
+                {WEIGHTS.map((w) => (
                   <Pressable
-                    onPress={handleSubmit}
+                    key={w.value}
                     style={[
-                      styles.addBtn,
-                      { backgroundColor: theme.colors.primary },
-                      !title.trim() && { opacity: 0.4 },
+                      styles.chip,
+                      weight === w.value && {
+                        backgroundColor: theme.colors.primary,
+                        borderColor: theme.colors.primary,
+                      },
                     ]}
-                    disabled={!title.trim()}
+                    onPress={() => setWeight(w.value)}
                   >
-                    <Text style={styles.addLabel}>add ✦</Text>
+                    <Text style={[
+                      styles.chipLabel,
+                      weight === w.value && { color: '#ffffff' },
+                    ]}>
+                      {w.label}
+                    </Text>
                   </Pressable>
-                </Animated.View>
+                ))}
               </View>
+            </View>
+
+            {/* Actions */}
+            <View style={styles.actions}>
+              <Pressable onPress={handleCancel} style={styles.cancelBtn}>
+                <Text style={styles.cancelLabel}>cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSubmit}
+                style={[
+                  styles.addBtn,
+                  { backgroundColor: theme.colors.primary },
+                  !title.trim() && { opacity: 0.4 },
+                ]}
+                disabled={!title.trim()}
+              >
+                <Text style={styles.addLabel}>tuck it in ♡</Text>
+              </Pressable>
             </View>
           </View>
         )}
@@ -170,8 +170,6 @@ export function TaskInput({ onAdd }: TaskInputProps) {
     </KeyboardAvoidingView>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 function makeStyles(theme: import('../../types').Theme) {
   return StyleSheet.create({
@@ -184,78 +182,72 @@ function makeStyles(theme: import('../../types').Theme) {
       borderColor: theme.colors.taskCardBorder,
       overflow: 'hidden',
     },
-    collapsedRow: {
-      height: 56,
-      justifyContent: 'center',
-      paddingHorizontal: spacing.lg,
+    collapsed: {
+      height: 60, flexDirection: 'row',
+      alignItems: 'center', paddingHorizontal: spacing.lg,
+      gap: spacing.sm,
     },
-    placeholder: {
+    collapsedIcon: {
+      fontSize: typography.size.xl,
+      color: theme.colors.primary,
+      fontFamily: fonts.regular,
+    },
+    collapsedLabel: {
       fontSize: typography.size.md,
       color: theme.colors.textSubtle,
+      fontFamily: fonts.regular,
     },
-    expandedInner: {
-      padding: spacing.md,
-      gap: spacing.md,
+    expanded: { padding: spacing.md, gap: spacing.sm },
+    inputRow: {
+      flexDirection: 'row', alignItems: 'center',
+      gap: spacing.sm, paddingBottom: spacing.sm,
+      borderBottomWidth: 1, borderBottomColor: theme.colors.taskCardBorder,
     },
+    inputIcon: { fontSize: 16, color: theme.colors.textSubtle },
     input: {
-      fontSize: typography.size.md,
-      color: theme.colors.text,
-      paddingVertical: spacing.sm,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.taskCardBorder,
-    },
-    bottomRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: spacing.sm,
-    },
-    priorityRow: {
-      flexDirection: 'row',
-      gap: spacing.xs,
-    },
-    priorityChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 4,
-      borderRadius: radius.full,
-      borderWidth: 1,
-      borderColor: theme.colors.taskCardBorder,
-    },
-    priorityDot: {
-      width: 6,
-      height: 6,
-      borderRadius: radius.full,
-    },
-    priorityLabel: {
-      fontSize: typography.size.xs,
-      color: theme.colors.textMuted,
-      fontWeight: typography.weight.medium,
-    },
-    actions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-    },
-    cancelBtn: {
-      paddingHorizontal: spacing.sm,
+      flex: 1, fontSize: typography.size.md,
+      color: theme.colors.text, fontFamily: fonts.regular,
       paddingVertical: spacing.xs,
     },
+    row: {
+      flexDirection: 'row', alignItems: 'center',
+      gap: spacing.md,
+    },
+    rowLabel: {
+      fontSize: typography.size.xs,
+      color: theme.colors.textMuted,
+      fontFamily: fonts.regular,
+      width: 60,
+    },
+    chips: { flexDirection: 'row', gap: spacing.xs, flex: 1 },
+    chip: {
+      paddingHorizontal: spacing.sm, paddingVertical: 4,
+      borderRadius: radius.full, borderWidth: 1,
+      borderColor: theme.colors.taskCardBorder,
+    },
+    chipLabel: {
+      fontSize: typography.size.xs,
+      color: theme.colors.textMuted,
+      fontFamily: fonts.regular,
+    },
+    actions: {
+      flexDirection: 'row', justifyContent: 'flex-end',
+      alignItems: 'center', gap: spacing.sm,
+      paddingTop: spacing.xs,
+    },
+    cancelBtn: { padding: spacing.sm },
     cancelLabel: {
       fontSize: typography.size.sm,
       color: theme.colors.textMuted,
+      fontFamily: fonts.regular,
     },
     addBtn: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
       borderRadius: radius.full,
     },
     addLabel: {
-      fontSize: typography.size.sm,
-      color: '#ffffff',
-      fontWeight: typography.weight.medium,
+      fontSize: typography.size.sm, color: '#ffffff',
+      fontFamily: fonts.medium,
     },
   });
 }

@@ -20,9 +20,15 @@ interface SettingsStore {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
+  userName: "",
   notificationsEnabled: false,
-  reminderTime: "09:00",
+  reminderTime: "21:30",
   dailyEncouragementEnabled: true,
+  collectibleShape: "star",
+  darkMode: false,
+  hapticFeedback: true,
+  showStreaks: false,
+  onboardingComplete: false,
 };
 
 // ─── Store ────────────────────────────────────────────────────────────────────

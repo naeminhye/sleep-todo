@@ -1,20 +1,13 @@
-/**
- * Date utilities used across stores and screens.
- * All functions deal in YYYY-MM-DD strings for date keys
- * and ISO datetime strings for timestamps.
- */
-
-/**
- * Returns today's date as a YYYY-MM-DD string in local time.
- */
 export function todayKey(): string {
+  return formatDateKey(new Date());
+}
+
+export function tomorrowKey(): string {
   const d = new Date();
+  d.setDate(d.getDate() + 1);
   return formatDateKey(d);
 }
 
-/**
- * Formats a Date object to YYYY-MM-DD in local time.
- */
 export function formatDateKey(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -22,34 +15,21 @@ export function formatDateKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-/**
- * Parses a YYYY-MM-DD string to a Date object at midnight local time.
- */
 export function parseDateKey(key: string): Date {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
-/**
- * Returns true if the stored date key is before today — meaning a daily
- * reset is required.
- */
 export function needsDailyReset(lastOpenedDate: string | null): boolean {
-  if (!lastOpenedDate) return false; // first ever launch — no reset needed
+  if (!lastOpenedDate) return false;
   return lastOpenedDate < todayKey();
 }
 
-/**
- * Returns a human-readable label for a date key:
- * "Today", "Yesterday", or a formatted date string.
- */
 export function friendlyDateLabel(dateKey: string): string {
   const today = todayKey();
   const yesterday = formatDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
-
   if (dateKey === today) return "Today";
   if (dateKey === yesterday) return "Yesterday";
-
   const date = parseDateKey(dateKey);
   return date.toLocaleDateString(undefined, {
     weekday: "short",
@@ -58,9 +38,21 @@ export function friendlyDateLabel(dateKey: string): string {
   });
 }
 
-/**
- * Formats an ISO datetime string to a short time label, e.g. "3:45 PM".
- */
+export function friendlyDayOfWeek(): string {
+  return new Date()
+    .toLocaleDateString(undefined, { weekday: "long" })
+    .toLowerCase();
+}
+
+export function friendlyMonthDay(): string {
+  return new Date()
+    .toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    })
+    .toLowerCase();
+}
+
 export function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, {
     hour: "numeric",
@@ -68,17 +60,22 @@ export function formatTime(iso: string): string {
   });
 }
 
-/**
- * Returns true if the given ISO datetime string is from today.
- */
 export function isToday(iso: string): boolean {
   return formatDateKey(new Date(iso)) === todayKey();
 }
 
-/**
- * Returns sorted date keys (descending — most recent first)
- * from a record object keyed by YYYY-MM-DD.
- */
 export function sortedDateKeys(record: Record<string, unknown>): string[] {
   return Object.keys(record).sort((a, b) => (a > b ? -1 : 1));
+}
+
+export function getMonthKey(dateKey: string): string {
+  return dateKey.slice(0, 7); // YYYY-MM
+}
+
+export function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+export function getFirstDayOfMonth(year: number, month: number): number {
+  return new Date(year, month - 1, 1).getDay();
 }
